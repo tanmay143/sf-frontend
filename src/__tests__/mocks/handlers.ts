@@ -1,31 +1,42 @@
 import { http, HttpResponse } from "msw";
 import { apiBaseUrl } from "@/lib/apiClient";
-import type { Contact, ContactPage } from "@/lib/contacts/types";
+import type { Address, Contact, ContactPage } from "@/lib/contacts/types";
 
 /** Prefix a path with the configured API base so handlers match apiClient URLs. */
 export function api(path: string): string {
   return `${apiBaseUrl}${path}`;
 }
 
+export function makeAddress(overrides: Partial<Address> = {}): Address {
+  return {
+    id: 1,
+    contact_id: 1,
+    type: "Home",
+    address: null,
+    city: "San Francisco",
+    state: "CA",
+    postal_code: null,
+    country: "USA",
+    ...overrides,
+  };
+}
+
 export function makeContact(overrides: Partial<Contact> = {}): Contact {
   const first_name = overrides.first_name ?? "Ada";
   const last_name = overrides.last_name ?? "Lovelace";
+  const id = overrides.id ?? 1;
 
   return {
-    id: 1,
+    id,
     first_name,
     last_name,
     email: "ada@example.com",
     phone: "+1-415-555-0101",
     company: "Analytical Engines",
     job_title: "Mathematician",
-    address: null,
-    city: "San Francisco",
-    state: "CA",
-    postal_code: null,
-    country: "USA",
     notes: null,
     photo: null,
+    addresses: overrides.addresses ?? [makeAddress({ contact_id: id })],
     created_at: "2026-08-19T17:04:53.743932Z",
     updated_at: "2026-08-19T17:04:53.743936Z",
     full_name: `${first_name} ${last_name}`,
@@ -47,6 +58,7 @@ export const CONTACTS: Contact[] = [
     company: "US Navy",
     job_title: "Rear Admiral",
     full_name: "Grace Hopper",
+    addresses: [makeAddress({ id: 2, contact_id: 2, city: "Arlington", state: "VA" })],
   }),
 ];
 

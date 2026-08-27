@@ -7,7 +7,13 @@ import ContactAvatar from "@/components/contacts/ContactAvatar";
 import DeleteContactButton from "@/components/contacts/DeleteContactButton";
 import { buttonClasses } from "@/components/ui/Button";
 import { getContact } from "@/lib/contacts/api";
-import { addressLine, formatTimestamp, jobLine } from "@/lib/contacts/format";
+import {
+  addressLine,
+  formatTimestamp,
+  groupAddressesByType,
+  jobLine,
+} from "@/lib/contacts/format";
+import { ADDRESS_TYPES, type Address, type AddressType } from "@/lib/contacts/types";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -38,12 +44,38 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+function AddressGroup({
+  type,
+  addresses,
+}: {
+  type: AddressType;
+  addresses: Address[];
+}) {
+  return (
+    <div className="space-y-2">
+      <h3 className="text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {type}
+      </h3>
+      <ul className="space-y-2">
+        {addresses.map((address) => (
+          <li
+            key={address.id}
+            className="rounded-md border border-hairline bg-background/60 px-3 py-2 text-sm"
+          >
+            {addressLine(address) ?? "—"}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default async function ContactDetailPage({ params }: PageProps) {
   const contact = await getContact(parseId((await params).id));
   if (!contact) notFound();
 
   const subtitle = jobLine(contact);
-  const address = addressLine(contact);
+  const groupedAddresses = groupAddressesByType(contact.addresses);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -102,7 +134,19 @@ export default async function ContactDetailPage({ params }: PageProps) {
         </Row>
         <Row label="Company">{contact.company}</Row>
         <Row label="Job title">{contact.job_title}</Row>
-        <Row label="Address">{address}</Row>
+        <Row label="Addresses">
+          {contact.addresses.length ? (
+            <div className="space-y-4">
+              {ADDRESS_TYPES.map((type) => {
+                const addresses = groupedAddresses[type];
+                if (!addresses?.length) return null;
+                return (
+                  <AddressGroup key={type} type={type} addresses={addresses} />
+                );
+              })}
+            </div>
+          ) : null}
+        </Row>
         <Row label="Notes">
           {contact.notes ? (
             <span className="whitespace-pre-wrap">{contact.notes}</span>

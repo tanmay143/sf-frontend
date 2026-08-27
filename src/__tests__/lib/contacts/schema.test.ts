@@ -2,6 +2,7 @@ import {
   CONTACT_FIELDS,
   contactInputSchema,
   formDataToValues,
+  parseAddressesFromFormData,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
 
@@ -13,11 +14,6 @@ function values(overrides: Record<string, string> = {}) {
     phone: "",
     company: "",
     job_title: "",
-    address: "",
-    city: "",
-    state: "",
-    postal_code: "",
-    country: "",
     notes: "",
     photo: "",
     ...overrides,
@@ -31,6 +27,7 @@ describe("contactInputSchema", () => {
     expect(parsed.email).toBe("ada@example.com");
     expect(parsed.phone).toBeNull();
     expect(parsed.notes).toBeNull();
+    expect(parsed.addresses).toEqual([]);
   });
 
   it("trims what the user typed", () => {
@@ -59,14 +56,14 @@ describe("contactInputSchema", () => {
 
   it("enforces the API's length limits", () => {
     const result = contactInputSchema.safeParse(
-      values({ first_name: "a".repeat(101), postal_code: "9".repeat(21) }),
+      values({ first_name: "a".repeat(101) }),
     );
 
     expect(zodFieldErrors(result.error!)).toEqual({
       first_name: "First name must be 100 characters or fewer",
-      postal_code: "Postal code must be 20 characters or fewer",
     });
   });
+
   it("nulls a blank photo and accepts a data URL", () => {
     expect(contactInputSchema.parse(values()).photo).toBeNull();
     expect(
@@ -84,6 +81,41 @@ describe("contactInputSchema", () => {
       "Photo must be an image data URL",
     );
   });
+
+  it("keeps addresses with content and drops empty rows", () => {
+    const parsed = contactInputSchema.parse({
+      ...values(),
+      addresses: [
+        {
+          type: "Home",
+          address: "1 Market St",
+          city: "San Francisco",
+          state: "",
+          postal_code: "",
+          country: "USA",
+        },
+        {
+          type: "Work",
+          address: "",
+          city: "",
+          state: "",
+          postal_code: "",
+          country: "",
+        },
+      ],
+    });
+
+    expect(parsed.addresses).toEqual([
+      {
+        type: "Home",
+        address: "1 Market St",
+        city: "San Francisco",
+        state: null,
+        postal_code: null,
+        country: "USA",
+      },
+    ]);
+  });
 });
 
 describe("formDataToValues", () => {
@@ -99,7 +131,35 @@ describe("formDataToValues", () => {
     expect(extracted.last_name).toBe("");
     expect(extracted.photo).toBe("");
     expect(Object.keys(extracted).sort()).toEqual(
-      [...CONTACT_FIELDS.map((field) => field.name), "photo"].sort(),
+      [...CONTACT_FIELDS.map((field) => field.name), "addressesJson", "photo"].sort(),
     );
+  });
+
+  it("parses addresses from the hidden JSON field", () => {
+    const formData = new FormData();
+    formData.set(
+      "addresses",
+      JSON.stringify([
+        {
+          type: "Work",
+          address: "100 Analytical Way",
+          city: "London",
+          state: null,
+          postal_code: null,
+          country: "UK",
+        },
+      ]),
+    );
+
+    expect(parseAddressesFromFormData(formData)).toEqual([
+      {
+        type: "Work",
+        address: "100 Analytical Way",
+        city: "London",
+        state: null,
+        postal_code: null,
+        country: "UK",
+      },
+    ]);
   });
 });

@@ -13,6 +13,7 @@ import {
 import {
   contactInputSchema,
   formDataToValues,
+  parseAddressesFromFormData,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
 import { resolvePhotoFromFormData } from "@/lib/contacts/photo";
@@ -40,6 +41,7 @@ export async function saveContactAction(
   formData: FormData,
 ): Promise<FormState> {
   const values = formDataToValues(formData);
+  const addresses = parseAddressesFromFormData(formData);
   const resolved = await resolvePhotoFromFormData(formData);
   values.photo = resolved.photo;
 
@@ -49,16 +51,18 @@ export async function saveContactAction(
       message: "Please fix the highlighted fields.",
       fieldErrors: { photo: resolved.error },
       values,
+      addressValues: addresses,
     };
   }
 
-  const parsed = contactInputSchema.safeParse(values);
+  const parsed = contactInputSchema.safeParse({ ...values, addresses });
   if (!parsed.success) {
     return {
       status: "error",
       message: "Please fix the highlighted fields.",
       fieldErrors: zodFieldErrors(parsed.error),
       values,
+      addressValues: addresses,
     };
   }
 
@@ -70,7 +74,7 @@ export async function saveContactAction(
         : await replaceContact(contactId, parsed.data);
   } catch (error) {
     if (error instanceof ApiUnreachableError) {
-      return { status: "error", message: UNREACHABLE, values };
+      return { status: "error", message: UNREACHABLE, values, addressValues: addresses };
     }
     if (error instanceof ApiError) {
       if (error.status === 409) {
@@ -81,6 +85,7 @@ export async function saveContactAction(
             email: apiErrorMessage(error, "This email is already in use."),
           },
           values,
+          addressValues: addresses,
         };
       }
       if (error.status === 422) {
@@ -89,12 +94,14 @@ export async function saveContactAction(
           message: "The API rejected these values.",
           fieldErrors: toFieldErrors(error),
           values,
+          addressValues: addresses,
         };
       }
       return {
         status: "error",
         message: apiErrorMessage(error, "The contact could not be saved."),
         values,
+        addressValues: addresses,
       };
     }
     throw error;

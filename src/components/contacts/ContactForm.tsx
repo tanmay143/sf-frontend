@@ -7,6 +7,7 @@ import { AlertCircle, Loader2 } from "lucide-react";
 import Field from "@/components/ui/Field";
 import Button, { buttonClasses } from "@/components/ui/Button";
 import PhotoField from "@/components/contacts/PhotoField";
+import AddressesField from "@/components/contacts/AddressesField";
 import { CONTACT_FIELD_GROUPS } from "@/lib/contacts/schema";
 import {
   EMPTY_FORM_STATE,
@@ -51,9 +52,8 @@ export default function ContactForm({
 }) {
   const [state, formAction] = useActionState(action, EMPTY_FORM_STATE);
 
-  function valueFor(name: keyof ContactInput): string {
-    if (name === "photo") return "";
-    return state.values?.[name] ?? contact?.[name] ?? "";
+  function valueFor(name: Exclude<keyof ContactInput, "addresses" | "photo">): string {
+    return state.values?.[name] ?? String(contact?.[name] ?? "");
   }
 
   const photoError = state.fieldErrors?.photo;
@@ -61,6 +61,18 @@ export default function ContactForm({
     state.values?.photo !== undefined
       ? state.values.photo || null
       : (contact?.photo ?? null);
+
+  const initialAddresses =
+    state.addressValues ??
+    contact?.addresses.map(({ type, address, city, state: region, postal_code, country }) => ({
+      type,
+      address,
+      city,
+      state: region,
+      postal_code,
+      country,
+    })) ??
+    undefined;
 
   return (
     <form action={formAction} noValidate className="space-y-8">
@@ -105,6 +117,8 @@ export default function ContactForm({
           </div>
         </fieldset>
       ))}
+
+      <AddressesField initialAddresses={initialAddresses} />
 
       <div className="flex items-center gap-2 border-t border-hairline pt-4">
         <SubmitButton label={submitLabel} />
