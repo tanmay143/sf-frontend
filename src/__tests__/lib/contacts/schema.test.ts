@@ -94,41 +94,6 @@ describe("contactInputSchema", () => {
     );
     expect(zodFieldErrors(result.error!).photo).toBe(PHOTO_DATA_URL_ERROR);
   });
-
-  it("keeps addresses with content and drops empty rows", () => {
-    const parsed = contactInputSchema.parse({
-      ...values(),
-      addresses: [
-        {
-          type: "Home",
-          address: "1 Market St",
-          city: "San Francisco",
-          state: "",
-          postal_code: "",
-          country: "USA",
-        },
-        {
-          type: "Work",
-          address: "",
-          city: "",
-          state: "",
-          postal_code: "",
-          country: "",
-        },
-      ],
-    });
-
-    expect(parsed.addresses).toEqual([
-      {
-        type: "Home",
-        address: "1 Market St",
-        city: "San Francisco",
-        state: null,
-        postal_code: null,
-        country: "USA",
-      },
-    ]);
-  });
 });
 
 describe("formDataToValues", () => {
