@@ -41,9 +41,19 @@ export async function saveContactAction(
   formData: FormData,
 ): Promise<FormState> {
   const values = formDataToValues(formData);
-  const addresses = parseAddressesFromFormData(formData);
+  const parsedAddresses = parseAddressesFromFormData(formData);
   const resolved = await resolvePhotoFromFormData(formData);
   values.photo = resolved.photo;
+
+  if (parsedAddresses.error) {
+    return {
+      status: "error",
+      message: "Please fix the highlighted fields.",
+      fieldErrors: { addresses: parsedAddresses.error },
+      values,
+      addressValues: parsedAddresses.addresses,
+    };
+  }
 
   if (resolved.error) {
     return {
@@ -51,18 +61,21 @@ export async function saveContactAction(
       message: "Please fix the highlighted fields.",
       fieldErrors: { photo: resolved.error },
       values,
-      addressValues: addresses,
+      addressValues: parsedAddresses.addresses,
     };
   }
 
-  const parsed = contactInputSchema.safeParse({ ...values, addresses });
+  const parsed = contactInputSchema.safeParse({
+    ...values,
+    addresses: parsedAddresses.addresses,
+  });
   if (!parsed.success) {
     return {
       status: "error",
       message: "Please fix the highlighted fields.",
       fieldErrors: zodFieldErrors(parsed.error),
       values,
-      addressValues: addresses,
+      addressValues: parsedAddresses.addresses,
     };
   }
 
@@ -74,7 +87,7 @@ export async function saveContactAction(
         : await replaceContact(contactId, parsed.data);
   } catch (error) {
     if (error instanceof ApiUnreachableError) {
-      return { status: "error", message: UNREACHABLE, values, addressValues: addresses };
+      return { status: "error", message: UNREACHABLE, values, addressValues: parsedAddresses.addresses };
     }
     if (error instanceof ApiError) {
       if (error.status === 409) {
@@ -85,7 +98,7 @@ export async function saveContactAction(
             email: apiErrorMessage(error, "This email is already in use."),
           },
           values,
-          addressValues: addresses,
+          addressValues: parsedAddresses.addresses,
         };
       }
       if (error.status === 422) {
@@ -94,14 +107,14 @@ export async function saveContactAction(
           message: "The API rejected these values.",
           fieldErrors: toFieldErrors(error),
           values,
-          addressValues: addresses,
+          addressValues: parsedAddresses.addresses,
         };
       }
       return {
         status: "error",
         message: apiErrorMessage(error, "The contact could not be saved."),
         values,
-        addressValues: addresses,
+        addressValues: parsedAddresses.addresses,
       };
     }
     throw error;

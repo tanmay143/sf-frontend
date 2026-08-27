@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useState, type ChangeEvent } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { compressPhotoFile } from "@/lib/contacts/compressPhoto";
 
@@ -11,9 +11,11 @@ import { compressPhotoFile } from "@/lib/contacts/compressPhoto";
 export default function PhotoField({
   initialPhoto,
   error,
+  onCompressingChange,
 }: {
   initialPhoto?: string | null;
   error?: string;
+  onCompressingChange?: (compressing: boolean) => void;
 }) {
   const id = useId();
   const [preview, setPreview] = useState<string | null>(initialPhoto ?? null);
@@ -22,6 +24,10 @@ export default function PhotoField({
   const [compressing, setCompressing] = useState(false);
 
   const shownError = error ?? localError;
+
+  useEffect(() => {
+    onCompressingChange?.(compressing);
+  }, [compressing, onCompressingChange]);
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -106,9 +112,9 @@ export default function PhotoField({
               "Upload photo"
             )}
           </label>
-          {/* No name — compressed data URL is submitted via the hidden input below. */}
           <input
             id={`${id}-file`}
+            name="photo_file"
             type="file"
             accept="image/jpeg,image/png,image/webp,image/gif"
             className="sr-only"

@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import {
-  ADDRESS_FIELD_SPECS,
-} from "@/lib/contacts/schema";
-import { ADDRESS_TYPES, EMPTY_ADDRESS, type AddressInput, type AddressType } from "@/lib/contacts/types";
-
+import { ADDRESS_FIELD_SPECS } from "@/lib/contacts/schema";
 import { addressToFormValues } from "@/lib/contacts/format";
+import {
+  ADDRESS_TYPES,
+  EMPTY_ADDRESS,
+  type AddressInput,
+  type AddressType,
+} from "@/lib/contacts/types";
 
 function blankAddress(type: AddressType = "Home"): AddressInput {
   return { ...EMPTY_ADDRESS, type };
@@ -30,6 +32,10 @@ function fromDraft(draft: AddressDraft): AddressInput {
   };
 }
 
+function fieldName(index: number, field: string) {
+  return `addresses[${index}][${field}]`;
+}
+
 export default function AddressesField({
   initialAddresses,
 }: {
@@ -38,12 +44,23 @@ export default function AddressesField({
   const [drafts, setDrafts] = useState<AddressDraft[]>(() =>
     (initialAddresses?.length ? initialAddresses : [blankAddress()]).map(toDraft),
   );
+  const [serialized, setSerialized] = useState(() =>
+    JSON.stringify(
+      (initialAddresses?.length ? initialAddresses : [blankAddress()]).map((address) =>
+        fromDraft(toDraft(address)),
+      ),
+    ),
+  );
 
   useEffect(() => {
     if (initialAddresses?.length) {
       setDrafts(initialAddresses.map(toDraft));
     }
   }, [initialAddresses]);
+
+  useEffect(() => {
+    setSerialized(JSON.stringify(drafts.map(fromDraft)));
+  }, [drafts]);
 
   function updateDraft(index: number, patch: Partial<AddressDraft>) {
     setDrafts((current) =>
@@ -62,8 +79,6 @@ export default function AddressesField({
       current.length === 1 ? [toDraft(blankAddress())] : current.filter((_, i) => i !== index),
     );
   }
-
-  const serialized = JSON.stringify(drafts.map(fromDraft));
 
   return (
     <fieldset className="space-y-4">
@@ -92,6 +107,7 @@ export default function AddressesField({
                   Type
                 </span>
                 <select
+                  name={fieldName(index, "type")}
                   value={draft.type}
                   onChange={(event) =>
                     updateDraft(index, {
@@ -129,6 +145,7 @@ export default function AddressesField({
                   </span>
                   <input
                     type="text"
+                    name={fieldName(index, field.name)}
                     value={draft[field.name]}
                     maxLength={field.maxLength}
                     placeholder={field.placeholder}

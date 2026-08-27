@@ -256,14 +256,58 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
 /** Max upload size before base64 encoding (~500 KB). */
 export const MAX_PHOTO_BYTES = 500 * 1024;
 
-function parseAddressesJson(raw: string): AddressInput[] {
-  if (!raw.trim()) return [];
+const NAMED_ADDRESS_KEY = /^addresses\[(\d+)\]\[(\w+)\]$/;
+
+/** Parse indexed native form fields for progressive enhancement (no-JS / pre-hydration). */
+export function parseAddressesFromNamedFields(formData: FormData): AddressInput[] {
+  const byIndex = new Map<number, Partial<Record<string, string>>>();
+
+  for (const [key, value] of formData.entries()) {
+    const match = key.match(NAMED_ADDRESS_KEY);
+    if (!match) continue;
+    const index = Number(match[1]);
+    const field = match[2];
+    const bucket = byIndex.get(index) ?? {};
+    bucket[field] = String(value);
+    byIndex.set(index, bucket);
+  }
+
+  if (byIndex.size === 0) return [];
+
+  return [...byIndex.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, row]) => ({
+      type: ADDRESS_TYPES.includes(row.type as (typeof ADDRESS_TYPES)[number])
+        ? (row.type as AddressInput["type"])
+        : "Home",
+      address: row.address?.trim() || null,
+      city: row.city?.trim() || null,
+      state: row.state?.trim() || null,
+      postal_code: row.postal_code?.trim() || null,
+      country: row.country?.trim() || null,
+    }));
+}
+
+export function parseAddressesFromFormData(formData: FormData): {
+  addresses: AddressInput[];
+  error?: string;
+} {
+  const named = parseAddressesFromNamedFields(formData);
+  if (named.some(hasAddressContent)) {
+    return { addresses: named };
+  }
+
+  const raw = String(formData.get("addresses") ?? "").trim();
+  if (!raw) return { addresses: [] };
+
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as AddressInput[];
+    if (!Array.isArray(parsed)) {
+      return { addresses: [], error: "Addresses payload is invalid" };
+    }
+    return { addresses: parsed as AddressInput[] };
   } catch {
-    return [];
+    return { addresses: [], error: "Addresses payload is invalid" };
   }
 }
 
@@ -288,8 +332,4 @@ export function formDataToValues(
     ...values,
     addressesJson,
   };
-}
-
-export function parseAddressesFromFormData(formData: FormData): AddressInput[] {
-  return parseAddressesJson(String(formData.get("addresses") ?? "[]"));
 }
