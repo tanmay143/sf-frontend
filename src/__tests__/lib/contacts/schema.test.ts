@@ -4,6 +4,7 @@ import {
   formDataToValues,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
+import { PHOTO_DATA_URL_ERROR } from "@/lib/contacts/photoValidation";
 
 function values(overrides: Record<string, string> = {}) {
   return {
@@ -19,6 +20,7 @@ function values(overrides: Record<string, string> = {}) {
     postal_code: "",
     country: "",
     notes: "",
+    photo: "",
     ...overrides,
   };
 }
@@ -66,6 +68,35 @@ describe("contactInputSchema", () => {
       postal_code: "Postal code must be 20 characters or fewer",
     });
   });
+  it("nulls a blank photo and accepts a data URL", () => {
+    expect(contactInputSchema.parse(values()).photo).toBeNull();
+    expect(
+      contactInputSchema.parse(
+        values({ photo: "data:image/png;base64,abc" }),
+      ).photo,
+    ).toBe("data:image/png;base64,abc");
+  });
+
+  it("rejects a non-image photo payload", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "https://example.com/a.png" }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe(PHOTO_DATA_URL_ERROR);
+  });
+
+  it("rejects disallowed image types such as SVG", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "data:image/svg+xml;base64,PHN2Zy8+" }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe(PHOTO_DATA_URL_ERROR);
+  });
+
+  it("rejects malformed base64 in a photo data URL", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "data:image/png;base64,not!!!valid" }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe(PHOTO_DATA_URL_ERROR);
+  });
 });
 
 describe("formDataToValues", () => {
@@ -79,8 +110,9 @@ describe("formDataToValues", () => {
 
     expect(extracted.first_name).toBe("Grace");
     expect(extracted.last_name).toBe("");
+    expect(extracted.photo).toBe("");
     expect(Object.keys(extracted).sort()).toEqual(
-      CONTACT_FIELDS.map((field) => field.name).sort(),
+      [...CONTACT_FIELDS.map((field) => field.name), "photo"].sort(),
     );
   });
 });

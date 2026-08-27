@@ -1,5 +1,9 @@
 import { z } from "zod";
 import type { ContactInput } from "./types";
+import {
+  isAllowedPhotoDataUrl,
+  PHOTO_DATA_URL_ERROR,
+} from "./photoValidation";
 
 /**
  * Client/server-shared validation for the contact form.
@@ -49,6 +53,17 @@ export const contactInputSchema = z.object({
   notes: z
     .string()
     .trim()
+    .transform((value) => value || null)
+    .nullable()
+    .default(null),
+  photo: z
+    .string()
+    .trim()
+    .max(700_000, "Photo is too large (max ~500 KB)")
+    .refine(
+      (value) => value === "" || isAllowedPhotoDataUrl(value),
+      PHOTO_DATA_URL_ERROR,
+    )
     .transform((value) => value || null)
     .nullable()
     .default(null),
@@ -218,10 +233,17 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
 export function formDataToValues(
   formData: FormData,
 ): Record<keyof ContactInput, string> {
-  return Object.fromEntries(
+  const values = Object.fromEntries(
     CONTACT_FIELDS.map((field) => [
       field.name,
       String(formData.get(field.name) ?? ""),
     ]),
   ) as Record<keyof ContactInput, string>;
+
+  // Photo is not a text field in CONTACT_FIELDS — carried via hidden input.
+  values.photo = String(formData.get("photo") ?? "");
+  return values;
 }
+
+/** Max upload size before base64 encoding (~500 KB). */
+export const MAX_PHOTO_BYTES = 500 * 1024;
