@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ContactInput } from "./types";
+import { ADDRESS_TYPES, type AddressInput, type ContactInput } from "./types";
 import {
   isAllowedPhotoDataUrl,
   PHOTO_DATA_URL_ERROR,
@@ -32,6 +32,25 @@ function requiredText(max: number, label: string) {
     .max(max, `${label} must be ${max} characters or fewer`);
 }
 
+export const addressInputSchema = z.object({
+  type: z.enum(ADDRESS_TYPES),
+  address: optionalText(300, "Street address"),
+  city: optionalText(120, "City"),
+  state: optionalText(120, "State"),
+  postal_code: optionalText(20, "Postal code"),
+  country: optionalText(120, "Country"),
+});
+
+function hasAddressContent(address: AddressInput): boolean {
+  return Boolean(
+    address.address?.trim() ||
+      address.city?.trim() ||
+      address.state?.trim() ||
+      address.postal_code?.trim() ||
+      address.country?.trim(),
+  );
+}
+
 export const contactInputSchema = z.object({
   first_name: requiredText(100, "First name"),
   last_name: requiredText(100, "Last name"),
@@ -45,11 +64,6 @@ export const contactInputSchema = z.object({
   phone: optionalText(40, "Phone"),
   company: optionalText(200, "Company"),
   job_title: optionalText(200, "Job title"),
-  address: optionalText(300, "Address"),
-  city: optionalText(120, "City"),
-  state: optionalText(120, "State"),
-  postal_code: optionalText(20, "Postal code"),
-  country: optionalText(120, "Country"),
   notes: z
     .string()
     .trim()
@@ -67,6 +81,10 @@ export const contactInputSchema = z.object({
     .transform((value) => value || null)
     .nullable()
     .default(null),
+  addresses: z
+    .array(addressInputSchema)
+    .default([])
+    .transform((addresses) => addresses.filter(hasAddressContent)),
 }) satisfies z.ZodType<ContactInput, unknown>;
 
 export type ContactFormValues = z.input<typeof contactInputSchema>;
@@ -90,7 +108,7 @@ export function zodFieldErrors(
 /* ------------------------------------------------------------------ */
 
 export interface ContactFieldSpec {
-  name: keyof ContactInput;
+  name: Exclude<keyof ContactInput, "addresses" | "photo">;
   label: string;
   type?: "text" | "email" | "tel" | "textarea";
   required?: boolean;
@@ -106,6 +124,54 @@ export interface ContactFieldGroup {
   description: string;
   fields: ContactFieldSpec[];
 }
+
+export interface AddressFieldSpec {
+  name: keyof Omit<AddressInput, "type">;
+  label: string;
+  maxLength: number;
+  placeholder?: string;
+  autoComplete?: string;
+  wide?: boolean;
+}
+
+export const ADDRESS_FIELD_SPECS: AddressFieldSpec[] = [
+  {
+    name: "address",
+    label: "Street address",
+    maxLength: 300,
+    placeholder: "1 Market St, Suite 400",
+    autoComplete: "street-address",
+    wide: true,
+  },
+  {
+    name: "city",
+    label: "City",
+    maxLength: 120,
+    placeholder: "San Francisco",
+    autoComplete: "address-level2",
+  },
+  {
+    name: "state",
+    label: "State / region",
+    maxLength: 120,
+    placeholder: "CA",
+    autoComplete: "address-level1",
+  },
+  {
+    name: "postal_code",
+    label: "Postal code",
+    maxLength: 20,
+    placeholder: "94105",
+    autoComplete: "postal-code",
+  },
+  {
+    name: "country",
+    label: "Country",
+    maxLength: 120,
+    placeholder: "USA",
+    autoComplete: "country-name",
+  },
+];
 
 export const CONTACT_FIELD_GROUPS: ContactFieldGroup[] = [
   {
@@ -168,48 +234,6 @@ export const CONTACT_FIELD_GROUPS: ContactFieldGroup[] = [
     ],
   },
   {
-    title: "Address",
-    description: "Optional postal details.",
-    fields: [
-      {
-        name: "address",
-        label: "Street address",
-        maxLength: 300,
-        placeholder: "1 Market St, Suite 400",
-        autoComplete: "street-address",
-        wide: true,
-      },
-      {
-        name: "city",
-        label: "City",
-        maxLength: 120,
-        placeholder: "San Francisco",
-        autoComplete: "address-level2",
-      },
-      {
-        name: "state",
-        label: "State / region",
-        maxLength: 120,
-        placeholder: "CA",
-        autoComplete: "address-level1",
-      },
-      {
-        name: "postal_code",
-        label: "Postal code",
-        maxLength: 20,
-        placeholder: "94105",
-        autoComplete: "postal-code",
-      },
-      {
-        name: "country",
-        label: "Country",
-        maxLength: 120,
-        placeholder: "USA",
-        autoComplete: "country-name",
-      },
-    ],
-  },
-  {
     title: "Notes",
     description: "Anything worth remembering. No length limit.",
     fields: [
@@ -229,21 +253,90 @@ export const CONTACT_FIELDS: ContactFieldSpec[] = CONTACT_FIELD_GROUPS.flatMap(
   (group) => group.fields,
 );
 
+/** Max upload size before base64 encoding (~500 KB). */
+export const MAX_PHOTO_BYTES = 500 * 1024;
+
+const NAMED_ADDRESS_KEY = /^addresses\[(\d+)\]\[(\w+)\]$/;
+
+function formHasNamedAddressFields(formData: FormData): boolean {
+  for (const key of formData.keys()) {
+    if (NAMED_ADDRESS_KEY.test(key)) return true;
+  }
+  return false;
+}
+
+/** Parse indexed native form fields for progressive enhancement (no-JS / pre-hydration). */
+export function parseAddressesFromNamedFields(formData: FormData): AddressInput[] {
+  const byIndex = new Map<number, Partial<Record<string, string>>>();
+
+  for (const [key, value] of formData.entries()) {
+    const match = key.match(NAMED_ADDRESS_KEY);
+    if (!match) continue;
+    const index = Number(match[1]);
+    const field = match[2];
+    const bucket = byIndex.get(index) ?? {};
+    bucket[field] = String(value);
+    byIndex.set(index, bucket);
+  }
+
+  if (byIndex.size === 0) return [];
+
+  return [...byIndex.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, row]) => ({
+      type: ADDRESS_TYPES.includes(row.type as (typeof ADDRESS_TYPES)[number])
+        ? (row.type as AddressInput["type"])
+        : "Home",
+      address: row.address?.trim() || null,
+      city: row.city?.trim() || null,
+      state: row.state?.trim() || null,
+      postal_code: row.postal_code?.trim() || null,
+      country: row.country?.trim() || null,
+    }));
+}
+
+export function parseAddressesFromFormData(formData: FormData): {
+  addresses: AddressInput[];
+  error?: string;
+} {
+  const named = parseAddressesFromNamedFields(formData);
+  if (formHasNamedAddressFields(formData)) {
+    return { addresses: named };
+  }
+
+  const raw = String(formData.get("addresses") ?? "").trim();
+  if (!raw) return { addresses: [] };
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return { addresses: [], error: "Addresses payload is invalid" };
+    }
+    return { addresses: parsed as AddressInput[] };
+  } catch {
+    return { addresses: [], error: "Addresses payload is invalid" };
+  }
+}
+
 /** Pull the contact fields out of a submitted form, as raw strings. */
 export function formDataToValues(
   formData: FormData,
-): Record<keyof ContactInput, string> {
+): Record<Exclude<keyof ContactInput, "addresses">, string> & {
+  addressesJson: string;
+} {
   const values = Object.fromEntries(
     CONTACT_FIELDS.map((field) => [
       field.name,
       String(formData.get(field.name) ?? ""),
     ]),
-  ) as Record<keyof ContactInput, string>;
+  ) as Record<Exclude<keyof ContactInput, "addresses">, string>;
 
   // Photo is not a text field in CONTACT_FIELDS — carried via hidden input.
   values.photo = String(formData.get("photo") ?? "");
-  return values;
-}
+  const addressesJson = String(formData.get("addresses") ?? "[]");
 
-/** Max upload size before base64 encoding (~500 KB). */
-export const MAX_PHOTO_BYTES = 500 * 1024;
+  return {
+    ...values,
+    addressesJson,
+  };
+}

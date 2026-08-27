@@ -2,10 +2,11 @@ import {
   addressLine,
   avatarHue,
   formatTimestamp,
+  groupAddressesByType,
   initials,
   jobLine,
 } from "@/lib/contacts/format";
-import { makeContact } from "../../mocks/handlers";
+import { makeAddress, makeContact } from "../../mocks/handlers";
 
 describe("initials", () => {
   it("takes the first letter of each name", () => {
@@ -51,20 +52,34 @@ describe("jobLine", () => {
 
 describe("addressLine", () => {
   it("skips the parts that are not filled in", () => {
-    expect(addressLine(makeContact())).toBe("San Francisco, CA, USA");
+    expect(addressLine(makeAddress())).toBe("San Francisco, CA, USA");
   });
 
   it("pairs the state with the postal code", () => {
     expect(
-      addressLine(makeContact({ address: "1 Market St", postal_code: "94105" })),
+      addressLine(makeAddress({ address: "1 Market St", postal_code: "94105" })),
     ).toBe("1 Market St, San Francisco, CA 94105, USA");
   });
 
   it("returns null when there is no address at all", () => {
     expect(
       addressLine(
-        makeContact({ city: null, state: null, country: null, postal_code: null }),
+        makeAddress({ city: null, state: null, country: null, postal_code: null }),
       ),
     ).toBeNull();
+  });
+});
+
+describe("groupAddressesByType", () => {
+  it("groups addresses by their type", () => {
+    const grouped = groupAddressesByType([
+      makeAddress({ id: 1, type: "Home", city: "San Francisco" }),
+      makeAddress({ id: 2, type: "Work", city: "London" }),
+      makeAddress({ id: 3, type: "Work", city: "Cambridge" }),
+    ]);
+
+    expect(grouped.Home).toHaveLength(1);
+    expect(grouped.Work).toHaveLength(2);
+    expect(grouped.Other).toBeUndefined();
   });
 });

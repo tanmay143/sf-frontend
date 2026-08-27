@@ -1,9 +1,9 @@
-import type { Contact } from "./types";
+import type { Address, AddressInput, AddressType } from "./types";
 
 /** Presentation helpers shared by the list, the detail page, and the cards. */
 
 /** Up to two letters for the avatar bubble. */
-export function initials(contact: Pick<Contact, "first_name" | "last_name">) {
+export function initials(contact: Pick<{ first_name: string; last_name: string }, "first_name" | "last_name">) {
   return `${contact.first_name.at(0) ?? ""}${contact.last_name.at(0) ?? ""}`
     .toUpperCase()
     .trim();
@@ -36,7 +36,10 @@ export function formatTimestamp(iso: string): string {
 }
 
 /** "Ada Lovelace · Mathematician at Analytical Engines"-style subtitle. */
-export function jobLine(contact: Contact): string | null {
+export function jobLine(contact: {
+  job_title: string | null;
+  company: string | null;
+}): string | null {
   if (contact.job_title && contact.company) {
     return `${contact.job_title} at ${contact.company}`;
   }
@@ -44,13 +47,42 @@ export function jobLine(contact: Contact): string | null {
 }
 
 /** Single-line postal address, skipping the parts that are not filled in. */
-export function addressLine(contact: Contact): string | null {
+export function addressLine(
+  address: Pick<
+    Address,
+    "address" | "city" | "state" | "postal_code" | "country"
+  >,
+): string | null {
   const parts = [
-    contact.address,
-    contact.city,
-    [contact.state, contact.postal_code].filter(Boolean).join(" "),
-    contact.country,
+    address.address,
+    address.city,
+    [address.state, address.postal_code].filter(Boolean).join(" "),
+    address.country,
   ].filter((part): part is string => Boolean(part && part.trim()));
 
   return parts.length ? parts.join(", ") : null;
+}
+
+/** Group addresses by type for the detail page. */
+export function groupAddressesByType(
+  addresses: Address[],
+): Partial<Record<AddressType, Address[]>> {
+  const grouped: Partial<Record<AddressType, Address[]>> = {};
+  for (const address of addresses) {
+    grouped[address.type] ??= [];
+    grouped[address.type]!.push(address);
+  }
+  return grouped;
+}
+
+/** Form-friendly string values for an address input row. */
+export function addressToFormValues(address: AddressInput) {
+  return {
+    type: address.type,
+    address: address.address ?? "",
+    city: address.city ?? "",
+    state: address.state ?? "",
+    postal_code: address.postal_code ?? "",
+    country: address.country ?? "",
+  };
 }

@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { AlertCircle, Loader2 } from "lucide-react";
 import Field from "@/components/ui/Field";
 import Button, { buttonClasses } from "@/components/ui/Button";
 import PhotoField from "@/components/contacts/PhotoField";
+import AddressesField from "@/components/contacts/AddressesField";
 import { CONTACT_FIELD_GROUPS } from "@/lib/contacts/schema";
 import {
   EMPTY_FORM_STATE,
@@ -20,11 +21,17 @@ export type ContactFormAction = (
   formData: FormData,
 ) => Promise<FormState>;
 
-function SubmitButton({ label }: { label: string }) {
+function SubmitButton({
+  label,
+  disabled,
+}: {
+  label: string;
+  disabled?: boolean;
+}) {
   const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" disabled={pending || disabled}>
       {pending ? (
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
       ) : null}
@@ -50,10 +57,10 @@ export default function ContactForm({
   cancelHref: string;
 }) {
   const [state, formAction] = useActionState(action, EMPTY_FORM_STATE);
+  const [photoCompressing, setPhotoCompressing] = useState(false);
 
-  function valueFor(name: keyof ContactInput): string {
-    if (name === "photo") return "";
-    return state.values?.[name] ?? contact?.[name] ?? "";
+  function valueFor(name: Exclude<keyof ContactInput, "addresses" | "photo">): string {
+    return state.values?.[name] ?? String(contact?.[name] ?? "");
   }
 
   const photoError = state.fieldErrors?.photo;
@@ -61,6 +68,18 @@ export default function ContactForm({
     state.values?.photo !== undefined
       ? state.values.photo || null
       : (contact?.photo ?? null);
+
+  const initialAddresses =
+    state.addressValues ??
+    contact?.addresses.map(({ type, address, city, state: region, postal_code, country }) => ({
+      type,
+      address,
+      city,
+      state: region,
+      postal_code,
+      country,
+    })) ??
+    undefined;
 
   return (
     <form action={formAction} noValidate className="space-y-8">
@@ -78,7 +97,11 @@ export default function ContactForm({
         </div>
       ) : null}
 
-      <PhotoField initialPhoto={initialPhoto} error={photoError} />
+      <PhotoField
+        initialPhoto={initialPhoto}
+        error={photoError}
+        onCompressingChange={setPhotoCompressing}
+      />
 
       {CONTACT_FIELD_GROUPS.map((group) => (
         <fieldset key={group.title} className="space-y-4">
@@ -106,8 +129,10 @@ export default function ContactForm({
         </fieldset>
       ))}
 
+      <AddressesField initialAddresses={initialAddresses} />
+
       <div className="flex items-center gap-2 border-t border-hairline pt-4">
-        <SubmitButton label={submitLabel} />
+        <SubmitButton label={submitLabel} disabled={photoCompressing} />
         <Link href={cancelHref} className={buttonClasses("secondary")}>
           Cancel
         </Link>
