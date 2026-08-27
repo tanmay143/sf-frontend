@@ -164,6 +164,39 @@ describe("formDataToValues", () => {
     });
   });
 
+  it("uses named fields even when every value is blank", () => {
+    const formData = new FormData();
+    formData.set(
+      "addresses",
+      JSON.stringify([
+        {
+          type: "Home",
+          address: "1 Market St",
+          city: "San Francisco",
+          state: null,
+          postal_code: null,
+          country: "USA",
+        },
+      ]),
+    );
+    formData.set("addresses[0][type]", "Home");
+    formData.set("addresses[0][address]", "");
+    formData.set("addresses[0][city]", "");
+
+    expect(parseAddressesFromFormData(formData)).toEqual({
+      addresses: [
+        {
+          type: "Home",
+          address: null,
+          city: null,
+          state: null,
+          postal_code: null,
+          country: null,
+        },
+      ],
+    });
+  });
+
   it("rejects malformed addresses JSON when no named fields are present", () => {
     const formData = new FormData();
     formData.set("addresses", "{not-json");

@@ -258,6 +258,13 @@ export const MAX_PHOTO_BYTES = 500 * 1024;
 
 const NAMED_ADDRESS_KEY = /^addresses\[(\d+)\]\[(\w+)\]$/;
 
+function formHasNamedAddressFields(formData: FormData): boolean {
+  for (const key of formData.keys()) {
+    if (NAMED_ADDRESS_KEY.test(key)) return true;
+  }
+  return false;
+}
+
 /** Parse indexed native form fields for progressive enhancement (no-JS / pre-hydration). */
 export function parseAddressesFromNamedFields(formData: FormData): AddressInput[] {
   const byIndex = new Map<number, Partial<Record<string, string>>>();
@@ -293,7 +300,7 @@ export function parseAddressesFromFormData(formData: FormData): {
   error?: string;
 } {
   const named = parseAddressesFromNamedFields(formData);
-  if (named.some(hasAddressContent)) {
+  if (formHasNamedAddressFields(formData)) {
     return { addresses: named };
   }
 
