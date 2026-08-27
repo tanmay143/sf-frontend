@@ -4,6 +4,7 @@ import {
   formDataToValues,
   zodFieldErrors,
 } from "@/lib/contacts/schema";
+import { PHOTO_DATA_URL_ERROR } from "@/lib/contacts/photoValidation";
 
 function values(overrides: Record<string, string> = {}) {
   return {
@@ -80,9 +81,21 @@ describe("contactInputSchema", () => {
     const result = contactInputSchema.safeParse(
       values({ photo: "https://example.com/a.png" }),
     );
-    expect(zodFieldErrors(result.error!).photo).toBe(
-      "Photo must be an image data URL",
+    expect(zodFieldErrors(result.error!).photo).toBe(PHOTO_DATA_URL_ERROR);
+  });
+
+  it("rejects disallowed image types such as SVG", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "data:image/svg+xml;base64,PHN2Zy8+" }),
     );
+    expect(zodFieldErrors(result.error!).photo).toBe(PHOTO_DATA_URL_ERROR);
+  });
+
+  it("rejects malformed base64 in a photo data URL", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "data:image/png;base64,not!!!valid" }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe(PHOTO_DATA_URL_ERROR);
   });
 });
 
