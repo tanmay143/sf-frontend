@@ -19,6 +19,7 @@ function values(overrides: Record<string, string> = {}) {
     postal_code: "",
     country: "",
     notes: "",
+    photo: "",
     ...overrides,
   };
 }
@@ -66,6 +67,23 @@ describe("contactInputSchema", () => {
       postal_code: "Postal code must be 20 characters or fewer",
     });
   });
+  it("nulls a blank photo and accepts a data URL", () => {
+    expect(contactInputSchema.parse(values()).photo).toBeNull();
+    expect(
+      contactInputSchema.parse(
+        values({ photo: "data:image/png;base64,abc" }),
+      ).photo,
+    ).toBe("data:image/png;base64,abc");
+  });
+
+  it("rejects a non-image photo payload", () => {
+    const result = contactInputSchema.safeParse(
+      values({ photo: "https://example.com/a.png" }),
+    );
+    expect(zodFieldErrors(result.error!).photo).toBe(
+      "Photo must be an image data URL",
+    );
+  });
 });
 
 describe("formDataToValues", () => {
@@ -79,8 +97,9 @@ describe("formDataToValues", () => {
 
     expect(extracted.first_name).toBe("Grace");
     expect(extracted.last_name).toBe("");
+    expect(extracted.photo).toBe("");
     expect(Object.keys(extracted).sort()).toEqual(
-      CONTACT_FIELDS.map((field) => field.name).sort(),
+      [...CONTACT_FIELDS.map((field) => field.name), "photo"].sort(),
     );
   });
 });
