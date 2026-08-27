@@ -1,13 +1,13 @@
 import "server-only";
 
 import { MAX_PHOTO_BYTES } from "@/lib/contacts/schema";
+import {
+  ALLOWED_PHOTO_MIME_TYPES,
+  isAllowedPhotoDataUrl,
+  PHOTO_DATA_URL_ERROR,
+} from "@/lib/contacts/photoValidation";
 
-const ALLOWED_PHOTO_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
+const ALLOWED_PHOTO_TYPES = new Set<string>(ALLOWED_PHOTO_MIME_TYPES);
 
 /**
  * Read the photo from the form. Client-side compression stores a data URL in the
@@ -21,7 +21,10 @@ export async function resolvePhotoFromFormData(
   }
 
   const hidden = String(formData.get("photo") ?? "");
-  if (hidden.startsWith("data:image/") && hidden.includes(";base64,")) {
+  if (hidden) {
+    if (!isAllowedPhotoDataUrl(hidden)) {
+      return { photo: "", error: PHOTO_DATA_URL_ERROR };
+    }
     if (hidden.length > MAX_PHOTO_BYTES * (4 / 3) + 64) {
       return {
         photo: "",

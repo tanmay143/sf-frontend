@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { ADDRESS_TYPES, type AddressInput, type ContactInput } from "./types";
+import {
+  isAllowedPhotoDataUrl,
+  PHOTO_DATA_URL_ERROR,
+} from "./photoValidation";
 
 /**
  * Client/server-shared validation for the contact form.
@@ -71,10 +75,8 @@ export const contactInputSchema = z.object({
     .trim()
     .max(700_000, "Photo is too large (max ~500 KB)")
     .refine(
-      (value) =>
-        value === "" ||
-        (value.startsWith("data:image/") && value.includes(";base64,")),
-      "Photo must be an image data URL",
+      (value) => value === "" || isAllowedPhotoDataUrl(value),
+      PHOTO_DATA_URL_ERROR,
     )
     .transform((value) => value || null)
     .nullable()
